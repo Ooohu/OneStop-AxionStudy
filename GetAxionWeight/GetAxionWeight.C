@@ -56,20 +56,11 @@ TH2F* Grab2DHist( std::vector<TString> fileconf, TString cut, TString var_y_to_x
 		std::cout << "2DHistogram binnings must have 6 elements." << std::endl;
 		return 0;
 	}
-//	std::cout<<"Draw "<<var_y_to_x<<" with cut "<<cut <<std::endl;
 
 	TString tmp_name = RandomName();
 	TH2F* hist = new TH2F(tmp_name, "2dhist",binnings[0],binnings[1],binnings[2],binnings[3],binnings[4],binnings[5]);
 
 	tree->Draw(var_y_to_x+">>"+tmp_name,cut);
-	//print out all the bin contents
-	//CHECK
-//	for(int i=0;i<hist->GetNbinsX();i++){
-//		for(int j=0;j<hist->GetNbinsY();j++){
-//			std::cout << hist->GetBinContent(i,j) << " ";
-//		}
-//		std::cout << std::endl;
-//	}
 	return hist;
 }
 
@@ -81,14 +72,11 @@ void ExportPNG(TH2F* hist, TString name){
 }
 
 //Normalize two 2dhistograms
-void Normalize2DHist(TH2F* hist1, TH2F* hist2){
+void FindOverlapping2DHist(TH2F* hist1, TH2F* hist2){
 	hist1->Divide(hist2);
 	hist1->Multiply(hist2);
 	hist2->Divide(hist1);
 	hist2->Multiply(hist1);
-
-	hist1->Scale(1/hist1->Integral());
-	hist2->Scale(1/hist2->Integral());
 }
 
 
@@ -98,18 +86,13 @@ void GetAxionWeight(){
 
 	std::string filename_Naxion = "../Inputs/ExpectedNaxions.txt";
 	std::vector<TString> fileconf_axionNtuples = {"../Inputs/AxiongleeNtuples_add.root","vertex_tree"};
-	std::vector<TString> fileconf_mesonNtuples = {"../Inputs/PythiaNuMIMesonProd_toy.root","PythiaTree"};
+	std::vector<TString> fileconf_mesonNtuples = {"../Inputs/PythiaNuMIMesonProd.root","PythiaTree"};
 	TString fileout_finalweight = "./output/AxionWeight.root";
 
 // Read Naxions from a text file
 	std::vector<double> mas =		GetNumFromText(filename_Naxion, 0, ',');
 	std::vector<double> fas =		GetNumFromText(filename_Naxion, 1, ',');
 	std::vector<double> Naxions =	GetNumFromText(filename_Naxion, 2, ',');
-
-	//CHECK Print all values of a vector
-//	for(int i=0;i<mas.size();i++){
-//		std::cout << mas[i] << std::endl;
-//	}
 
 // Find the closest mass to the target mass
 	std::vector<double> fa_indices;//indices of the identical mass 
@@ -145,15 +128,15 @@ void GetAxionWeight(){
 	//Find overlapped phase space of two 2dhist and normalize them
 	TH2F* twodAxionHist_reweight = (TH2F*) twodAxionHist->Clone();
 	TH2F* twodMesonHist_reweight = (TH2F*) twodMesonHist->Clone();
-	Normalize2DHist(twodAxionHist_reweight, twodMesonHist_reweight);
+	FindOverlapping2DHist(twodAxionHist_reweight, twodMesonHist_reweight);
 
-	ExportPNG(twodAxionHist_reweight, "Axion2DHist_reweight1");
-	ExportPNG(twodMesonHist_reweight, "Meson2DHist_reweight1");
+	ExportPNG(twodAxionHist_reweight, "Axion2DHist_overlap");
+	ExportPNG(twodMesonHist_reweight, "Meson2DHist_overlap");
 
 	//Get the ratio of two 2dhist meson/axion
 	TH2F* twodRatioHist = (TH2F*) twodMesonHist_reweight->Clone();
 	twodRatioHist->Divide(twodAxionHist_reweight);
-	ExportPNG(twodRatioHist, "Ratio2DHist_Meson2Axion");
+	ExportPNG(twodRatioHist, "Ratio2DHist_MesonOverAxion");
 	
 //🎉Evalue the final weight for each axion events
 	TFile* file_mafaaxion = TFile::Open(fileout_finalweight, "recreate");
@@ -177,8 +160,9 @@ void GetAxionWeight(){
 	tree_axion->SetBranchAddress("beta_cosine",&beta_cosine);
 	tree_axion->SetBranchAddress("mctruth_exiting_photon_energy",&mctruth_exiting_photon_energy);
 
-	std::cout<<"CHECK "<<__LINE__<<std::endl;
 	int nEntries = tree_axion->GetEntries();
+	double nEntries_inMeson = twodMesonHist_reweight->Integral();
+	std::vector<double> total_weight(fa_indices.size(),0);
 
 	for(int i=0; i<nEntries; i++){
 		tree_axion->GetEntry(i);
@@ -195,7 +179,8 @@ void GetAxionWeight(){
 		//Fill in weights for the fa array
 		for(int j=0;j<fa_indices.size();j++){
 			falist[j] = fas[fa_indices[j]];
-			wgt[j] = weight_ratio*Naxions[fa_indices[j]];
+			wgt[j] = weight_ratio*Naxions[fa_indices[j]]/nEntries_inMeson;
+			total_weight[j] += wgt[j];
 		}
 		tree_mafaaxion->Fill();
 	}
@@ -205,7 +190,6 @@ void GetAxionWeight(){
 	tree_mafaaxion->Write();
 	file_mafaaxion->Write();
 	tree_mafaaxion->Print();
-
 
 	}
 
