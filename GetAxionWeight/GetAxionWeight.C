@@ -79,7 +79,6 @@ void FindOverlapping2DHist(TH2F* hist1, TH2F* hist2){
 	hist2->Multiply(hist1);
 }
 
-
 void GetAxionWeight(){
 	double ma_target = 0.7; //GeV
 	double ma_sigma = 0.04; //take ma_target +/- ma_sigma as the mass range
@@ -144,9 +143,11 @@ void GetAxionWeight(){
 
 	double falist[fa_indices.size()]; //a set of arrays
 	double wgt[fa_indices.size()];
+	int falength = fa_indices.size();
 
 	tree_mafaaxion->Branch("fa", falist, ("fa["+std::to_string(fa_indices.size())+"]/D").c_str());
 	tree_mafaaxion->Branch("wgt", wgt, ("wgt["+std::to_string(fa_indices.size())+"]/D").c_str());
+	tree_mafaaxion->Branch("falength", &falength, "falength/I");
 
 	//Need some varaibles from the old tree
 	TFile* file_axion = TFile::Open(fileconf_axionNtuples[0], "read");
@@ -191,5 +192,5 @@ void GetAxionWeight(){
 	file_mafaaxion->Write();
 	tree_mafaaxion->Print();
 
-	}
+}
 
